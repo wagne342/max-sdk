@@ -1,0 +1,3 @@
+/Users/jlw_cnmat/Documents/GitHub/wagne342/max-sdk/source/audio/jw_vindex~/CMakeFiles/rebuild_cache.dir
+/Users/jlw_cnmat/Documents/GitHub/wagne342/max-sdk/source/audio/jw_vindex~/CMakeFiles/edit_cache.dir
+/Users/jlw_cnmat/Documents/GitHub/wagne342/max-sdk/source/audio/jw_vindex~/CMakeFiles/jw_vindex_tilde.dir

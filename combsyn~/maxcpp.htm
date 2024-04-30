@@ -1,0 +1,426 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>C++ Externals for Max/MSP (v5)</title>
+<style type="text/css">
+<!--
+body {
+	font-family: Geneva, Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	color: #333333;
+}
+p {
+	font-family: Geneva, Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	color: #333333;
+	margin-left: 16px;
+}
+table {
+	margin-left: 16px;
+}
+td {
+	font-family: Geneva, Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	color: #333333;
+}
+ul {
+	margin-left: 8px;
+	margin-top: 2px;
+	list-style-type: square;
+}
+li {
+	list-style-position: outside;
+}
+h1 {
+	color: #CC3333;
+	font-size: 32px;
+	clear: both;
+	padding-top: 8px;
+	border-bottom-width: 1px;
+	border-top-width: 0px;
+	border-right-width: 0px;
+	border-left-width: 0px;
+	border-bottom-color: #666666;
+	border-top-style: solid;
+	border-right-style: solid;
+	border-bottom-style: solid;
+	border-left-style: solid;
+}
+h2 {
+	color: #663333;
+	font-size: 22px;
+	clear: both;
+	padding-top: 8px;
+	border-bottom-width: 1px;
+	border-top-width: 0px;
+	border-right-width: 0px;
+	border-left-width: 0px;
+	border-bottom-color: #666666;
+	border-top-style: solid;
+	border-right-style: solid;
+	border-bottom-style: solid;
+	border-left-style: solid;
+}
+h3 {
+	color: #993300;
+	font-size: 18px;
+	clear: both;
+	padding-top: 8px;
+}
+h4 { 
+	font-size: 16px;
+	color: #996633;
+	padding-top: 8px;
+}
+pre {
+	font-family: "Courier New", Courier, mono;
+	font-size: 12px;
+	color: #111111;
+	clear: both;
+	border: 1px #CCCCCC solid;
+	padding: 4px;
+	margin-left: 16px;
+	margin-right: 4px;
+	margin-top: 4px;
+	margin-bottom: 4px;
+	background-color: #EEEEEE;
+}
+a {
+	font-weight: bold;
+	color: #336699;
+}
+em, i {
+	font-style: italic;
+	color: #990000;
+	font-weight: bold;
+}
+
+-->
+</style>
+</head>
+
+<body>
+<h1>Max/MSP externals in C++</h1>
+<p>This page describes a template header file for constructing Max/MSP externals from C++ classes, in a friendly and readable manner. The core notion is that an instance of the external is encapsulated by an instance of the C++ class. </p>
+<h4>Download</h4>
+<p><a href="soft/maxcpp5.zip">maxcpp5.zip</a> (includes headers, examples and Xcode project (sorry no Windows project, but it should work :-)))</p>
+<p>For Max 4 users, here is the old version: <a href="soft/maxcpp.zip">maxcpp.zip</a></p>
+<h4>Max externals </h4>
+<p>For example:</p>
+<pre>#include "maxcpp5.h"
+
+class Example : public MaxCpp5&lt;Example> {
+public:
+	Example(t_symbol * sym, long ac, t_atom * av) { 
+		setupIO(2, 2); // inlets / outlets
+		post("created an example"); 
+	}
+	~Example() { post("freed an example"); }	
+	
+	// methods:
+	void bang(long inlet) { 
+		post("bang in inlet %i!", inlet); 
+		outlet_bang(m_outlet[0]);
+	}
+	void test(long inlet, t_symbol * s, long ac, t_atom * av) { 
+		post("%s in inlet %i (%i args)", s->s_name, inlet, ac);
+		outlet_anything(m_outlet[1], gensym("test"), ac, av); 
+	}
+};
+
+extern "C" int main(void) {
+	// create a class with the given name:
+	Example::makeMaxClass("example");
+	REGISTER_METHOD(Example, bang);
+	REGISTER_METHOD_GIMME(Example, test);
+} </pre>
+<h4>MSP externals </h4>
+<p>MSP externals gain all the benefits of the Max external template, plus a helper wrapper for the DSP function. For example: </p>
+<pre>#include "maxcpp5.h"
+
+
+class Example : public MspCpp5&lt;Example> {
+public:
+	Example(t_symbol * sym, long ac, t_atom * av) { 
+		setupIO(&Example::perform, 2, 2); 
+		post("created an example"); 
+	}
+	~Example() { post("freed an example"); }	
+	
+	// methods:
+	void bang(long inlet) { 
+		post("bang in inlet %i!", inlet); 
+	}
+	void test(long inlet, t_symbol * s, long ac, t_atom * av) { 
+		post("%s in inlet %i (%i args)", s->s_name, inlet, ac);
+	}
+	
+	// optional method: gets called when the dsp chain is modified
+	void dsp() { post("user-dsp"); }
+	
+	// signal processing example: inverts sign of inputs
+	void perform(int vs, t_sample ** inputs, t_sample ** outputs) {
+		for (int channel = 0; channel &lt; 2; channel++) {
+			t_sample * in = inputs[channel];
+			t_sample * out = outputs[channel];
+			for (int i=0; i&lt;vs; i++) {
+				out[i] = -in[i];
+			}
+		}
+	}
+};
+
+extern "C" int main(void) {
+	// create a class with the given name:
+	Example::makeMaxClass("example~");
+	REGISTER_METHOD(Example, bang);
+	REGISTER_METHOD_GIMME(Example, test);
+}
+</pre>
+<h4>Complete header:</h4>
+<p>This is the complete maxcpp.h header:</p>
+<pre>
+/*
+
+Write MaxMSP (v5) objects in C++
+
+-- general --
+
+Allows the definition of a max object as a C++ class. 
+
+Most of the mechanics of typical max objects are encapsulated by the curiously recurring template pattern. 
+
+See the example.cpp and example~.cpp for max and msp example objects.
+
+note: be sure to include this header only once, or the linker will complain of duplicate symbols
+
+note 2: this probably won't work with virtuals -- and definitely won't work with multiple inheritance!
+
+-- licence --
+maxcpp is distributed under the permissive BSD-like MIT licence:
+
+Copyright (c) 2009 Graham Wakefield
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+*/
+#ifndef MAXMSP_CPP_5_H
+#define MAXMSP_CPP_5_H
+
+#include "ext.h"
+#include "ext_obex.h"
+#include "ext_common.h"
+#include "commonsyms.h"
+#include "z_dsp.h"
+
+#include &lt;new&gt;
+
+#define MAX_CPP_VERSION	0.005
+#define MAX_CPP_MAX_DSP_SIGNALS (16) // max. no. signal ins/outs
+
+// for A_NOTHING methods (e.g. bang):
+#define REGISTER_METHOD(CLASS, METHOD)	class_addmethod(	\
+	(t_class *)CLASS::m_class,								\
+	(method)CLASS::MaxMethod&lt;&CLASS::METHOD&gt;::call,			\
+	#METHOD,												\
+	0);	
+// for A_GIMME methods (t_symbol * s, long argc, void * argv):
+#define REGISTER_METHOD_GIMME(CLASS, METHOD)	class_addmethod(	\
+	(t_class *)CLASS::m_class,								\
+	(method)CLASS::MaxMethodGimme&lt;&CLASS::METHOD&gt;::call,	\
+	#METHOD,												\
+	A_GIMME,												\
+	0);	
+	
+// a purely static base class for Max and MSP objects:
+template &lt;typename T&gt;
+class MaxCppBase {
+public:	
+	static t_class * m_class;
+	
+	typedef void (T::*maxmethodgimme)(long inlet, t_symbol * s, long ac, t_atom * av);
+	typedef void (T::*maxmethod)(long inlet);
+	
+	// template functors to forward Max messages to class methods:
+	template&lt;maxmethodgimme F&gt;
+	struct MaxMethodGimme {
+		static void call(T * x, t_symbol * s, long ac, t_atom * av) { ((x)-&gt;*F)(proxy_getinlet((t_object *)x), s, ac, av); }
+	};
+	template&lt;maxmethod F&gt;
+	struct MaxMethod {
+		static void call(T * x) { ((x)-&gt;*F)(proxy_getinlet((t_object *)x)); }
+	};
+};
+
+// inherit from this one for non-audio objects
+template &lt;typename T&gt;
+class MaxCpp5 : public MaxCppBase&lt;T&gt; {
+public:
+	t_object m_ob;
+	int m_outlets, m_inlets;
+	void **	m_outlet;
+	void **	m_inletproxy;
+	long m_whichinlet;
+	
+	static t_class * makeMaxClass(const char * name);
+	static void * create(t_symbol * sym, long ac, t_atom * av);
+	static void destroy(t_object * x);
+	
+	void setupIO(unsigned int numinlets, unsigned int numoutlets);
+	
+	// C++ operator overload to treat MaxCpp5 objects as t_objects
+	operator t_object & () { return m_ob; }
+	
+	
+};
+
+// inherit from this one for audio objects
+template &lt;typename T&gt;
+class MspCpp5 : public MaxCppBase&lt;T&gt; {
+public:
+	typedef void (T::*maxmethodperform)(int vs, t_sample ** inputs, t_sample ** outputs);
+	
+	t_pxobject m_ob;
+	int m_siginlets, m_sigoutlets;
+	maxmethodperform m_perform;
+	
+	static t_class * makeMaxClass(const char * name);
+	static void * create(t_symbol * sym, long ac, t_atom * av);
+	static void destroy(t_object * x);
+	
+	void setupIO(maxmethodperform meth, unsigned int siginlets, unsigned int sigoutlets);
+	
+	static void internal_dsp(MspCpp5&lt;T&gt; * x, t_signal **sp, short *count);
+	static t_int * internal_perform(t_int *);
+	
+	// stub function in case the user doesn't supply one
+	void dsp() {}
+		
+	struct PerformData {
+		T * x;
+		int vs;
+		t_sample * inputs[MAX_CPP_MAX_DSP_SIGNALS];
+		t_sample * outputs[MAX_CPP_MAX_DSP_SIGNALS];
+	};
+};
+
+// note: only include this file once to prevent linker errors!
+template&lt;typename T&gt; t_class * MaxCppBase&lt;T&gt;::m_class = 0;
+
+template&lt;typename T&gt; t_class * MaxCpp5&lt;T&gt;::makeMaxClass(const char * name) {
+	common_symbols_init();
+	MaxCppBase&lt;T&gt;::m_class = class_new((char *)name, (method)MaxCpp5&lt;T&gt;::create, (method)MaxCpp5&lt;T&gt;::destroy, sizeof(T), 0L, A_GIMME, 0);   
+	class_register(CLASS_BOX, MaxCppBase&lt;T&gt;::m_class);
+	return MaxCppBase&lt;T&gt;::m_class;
+}
+
+template&lt;typename T&gt; void * MaxCpp5&lt;T&gt;::create(t_symbol * sym, long ac, t_atom * av) {
+	void * x = object_alloc(MaxCppBase&lt;T&gt;::m_class);
+	new(x) T(sym, ac, av);
+	return (T *)x; 
+}
+
+template&lt;typename T&gt; void MaxCpp5&lt;T&gt;::destroy(t_object * x) {
+	T * t = (T *)x;
+	t-&gt;~T();
+	// free outlets:
+	sysmem_freeptr(t-&gt;m_outlet);
+	sysmem_freeptr(t-&gt;m_inletproxy);
+}
+
+template&lt;typename T&gt; void MaxCpp5&lt;T&gt;::setupIO(unsigned int numinlets, unsigned int numoutlets) {
+	if (numinlets &gt; 0) {
+		m_inlets = (long)numinlets - 1;
+		m_inletproxy = (void **)sysmem_newptr(sizeof(void *) * m_inlets);
+		for (long i=1; i&lt;=m_inlets; i++)
+			m_inletproxy[i] = proxy_new(this, i, &this-&gt;m_whichinlet); // generic outlet
+	}
+	
+	m_outlets = (long)numoutlets;
+	m_outlet = (void **)sysmem_newptr(sizeof(void *) * m_outlets);
+	for (long i=0; i&lt;m_outlets; i++)
+		m_outlet[m_outlets - i - 1] = outlet_new(this, NULL); // generic outlet
+}
+
+template&lt;typename T&gt; t_class * MspCpp5&lt;T&gt;::makeMaxClass(const char * name) {
+	common_symbols_init();
+	MaxCppBase&lt;T&gt;::m_class = class_new((char *)name, (method)MspCpp5&lt;T&gt;::create, (method)MspCpp5&lt;T&gt;::destroy, sizeof(T), 0L, A_GIMME, 0);   
+	class_dspinit(MaxCppBase&lt;T&gt;::m_class);
+	class_addmethod(MaxCppBase&lt;T&gt;::m_class, (method)MspCpp5&lt;T&gt;::internal_dsp, "dsp", A_CANT, 0);
+	class_register(CLASS_BOX, MaxCppBase&lt;T&gt;::m_class);
+	return MaxCppBase&lt;T&gt;::m_class;
+}
+
+template&lt;typename T&gt; void * MspCpp5&lt;T&gt;::create(t_symbol * sym, long ac, t_atom * av) {
+	void * x = object_alloc(MaxCppBase&lt;T&gt;::m_class);
+	new(x) T(sym, ac, av);
+	return (T *)x; 
+}
+
+template&lt;typename T&gt; void MspCpp5&lt;T&gt;::destroy(t_object * x) {
+	dsp_free((t_pxobject *)x);
+	T * t = (T *)x;
+	t-&gt;~T();
+}
+
+template&lt;typename T&gt; void MspCpp5&lt;T&gt;::setupIO(maxmethodperform meth, unsigned int siginlets, unsigned int sigoutlets) {
+	m_perform = meth;
+	m_siginlets = MIN(siginlets, MAX_CPP_MAX_DSP_SIGNALS);
+	m_sigoutlets = MIN(sigoutlets, MAX_CPP_MAX_DSP_SIGNALS);
+	dsp_setup((t_pxobject *)this, m_siginlets);
+	// prevent recycling of inputs for outputs
+	m_ob.z_misc = Z_NO_INPLACE;
+	for (int i=0; i &lt; m_sigoutlets; i++)
+		outlet_new(this, "signal");
+}
+
+template&lt;typename T&gt; void MspCpp5&lt;T&gt;::internal_dsp(MspCpp5&lt;T&gt; * x, t_signal **sp, short *count) {
+	int i, s=0;
+	PerformData pdata;
+	pdata.x = (T *)x;	
+	pdata.vs = sp[i]-&gt;s_n;
+	for (i=0; i&lt; x-&gt;m_siginlets; i++, s++) {
+		pdata.inputs[i] = sp[s]-&gt;s_vec;
+	}
+	for (i=0; i&lt; x-&gt;m_sigoutlets; i++, s++) {
+		pdata.outputs[i] = sp[s]-&gt;s_vec;
+	}
+	dsp_addv(MspCpp5&lt;T&gt;::internal_perform, sizeof(PerformData)/sizeof(t_int), (void **)&pdata);
+	pdata.x-&gt;dsp();
+}
+
+template&lt;typename T&gt; t_int * MspCpp5&lt;T&gt;::internal_perform(t_int * w) {
+	PerformData * pdata = (PerformData *)(w+1);
+	MspCpp5&lt;T&gt; * x = pdata-&gt;x;
+	T * self = pdata-&gt;x;
+	if (!x-&gt;m_ob.z_disabled) {
+		// forward this to the user dsp routine:
+		((self)-&gt;*(self-&gt;m_perform))(pdata-&gt;vs, pdata-&gt;inputs, pdata-&gt;outputs);
+	}
+	return w + sizeof(PerformData)/sizeof(t_int) + 1;
+}
+
+#endif //MAXMSP_CPP_5_H
+
+</pre>
+</body>
+
+</html>
